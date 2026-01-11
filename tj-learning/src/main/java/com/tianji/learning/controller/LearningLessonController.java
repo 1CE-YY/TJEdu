@@ -62,7 +62,7 @@ public class LearningLessonController {
      * 创建学习计划
      */
     @ApiOperation("创建学习计划")
-    @PostMapping("plans")
+    @PostMapping("/plans")
     public void createLearningPlan(@RequestBody @Validated LearningPlanDTO dto) {
         lessonService.createLearningPlan(dto);
     }

@@ -138,7 +138,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         }
 
         // 5.返回分页结果
-        return PageDTO.o    f(page, vos);
+        return PageDTO.of(page, vos);
 
     }
 
