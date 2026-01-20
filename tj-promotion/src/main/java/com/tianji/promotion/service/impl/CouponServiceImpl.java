@@ -53,6 +53,10 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
 
     private final IExchangeCodeService exchangeCodeService;
 
+    private final IUserCouponService userCouponService;
+
+    private final CouponMapper couponMapper;
+
     @Override
     @Transactional
     public void saveCoupon(CouponFormDTO dto) {
@@ -64,7 +68,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         }
         List<Long> scopes = dto.getScopes();
 
-        if  (CollUtils.isEmpty(scopes)) {
+        if (CollUtils.isEmpty(scopes)) {
             throw new BizIllegalException("优惠券作用范围不能为空");
         }
 
@@ -86,7 +90,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
                 .like(StringUtils.isNotBlank(name), Coupon::getName, query.getName())
                 .page(query.toMpPageDefaultSortByCreateTimeDesc());
         List<Coupon> records = page.getRecords();
-        if  (CollUtils.isEmpty(records)) {
+        if (CollUtils.isEmpty(records)) {
             return PageDTO.empty(page);
         }
         List<CouponPageVO> voList = BeanUtils.copyList(records, CouponPageVO.class);
@@ -125,6 +129,43 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
 
     @Override
     public List<CouponVO> queryIssuingCoupons() {
-        return List.of();
+        List<Coupon> coupons = lambdaQuery()
+                .eq(Coupon::getStatus, CouponStatus.ISSUING)
+                .eq(Coupon::getObtainWay, ObtainType.PUBLIC)
+                .list();
+        if (CollUtils.isEmpty(coupons)) {
+            return Collections.emptyList();
+        }
+
+        List<Long> couponIds = coupons.stream().map(Coupon::getId).collect(Collectors.toList());
+
+        List<UserCoupon> userCoupons = userCouponService.lambdaQuery()
+                .eq(UserCoupon::getUserId, UserContext.getUser())
+                .in(UserCoupon::getCouponId, couponIds)
+                .list();
+
+        Map<Long, Long> issueMap = userCoupons.stream()
+                .collect(Collectors.groupingBy(UserCoupon::getCouponId, Collectors.counting()));
+
+        Map<Long, Long> unusedMap = userCoupons.stream()
+                .filter(uc -> Objects.equals(uc.getStatus(), UserCouponStatus.UNUSED))
+                .collect(Collectors.groupingBy(UserCoupon::getCouponId, Collectors.counting()));
+
+        List<CouponVO> list = new ArrayList<>(coupons.size());
+        for (Coupon coupon : coupons) {
+            CouponVO vo = BeanUtils.toBean(coupon, CouponVO.class);
+
+            vo.setAvailable(coupon.getIssueNum() < coupon.getTotalNum() && issueMap.getOrDefault(coupon.getId(), 0L) < coupon.getUserLimit());
+            vo.setReceived(unusedMap.getOrDefault(coupon.getId(), 0L) > 0L);
+            list.add(vo);
+        }
+
+        return list;
+
+    }
+
+    @Override
+    public void incrementIssueNum(Long couponId) {
+        couponMapper.incrementIssueNum(couponId);
     }
 }

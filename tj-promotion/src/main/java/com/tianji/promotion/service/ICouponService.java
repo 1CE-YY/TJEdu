@@ -28,4 +28,6 @@ public interface ICouponService extends IService<Coupon> {
     void issueCoupon(Long id, CouponIssueFormDTO dto);
 
     List<CouponVO> queryIssuingCoupons();
+
+    void incrementIssueNum(Long couponId);
 }
