@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.tianji.promotion.constants.PromotionConstants.COUPON_CODE_MAP_KEY;
 import static com.tianji.promotion.constants.PromotionConstants.COUPON_CODE_SERIAL_KEY;
 
 
@@ -30,14 +31,16 @@ import static com.tianji.promotion.constants.PromotionConstants.COUPON_CODE_SERI
  * @since 2025-07-12
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, ExchangeCode> implements IExchangeCodeService {
 
 
+    private final StringRedisTemplate stringRedisTemplate;
+
     private BoundValueOperations<String, String> serialOps;
 
-    public ExchangeCodeServiceImpl(StringRedisTemplate stringRedisTemplate) {
+    public ExchangeCodeServiceImpl(StringRedisTemplate stringRedisTemplate1, StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate = stringRedisTemplate1;
         this.serialOps = stringRedisTemplate.boundValueOps(COUPON_CODE_SERIAL_KEY);
     }
 
@@ -72,7 +75,8 @@ public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, Exc
 
     @Override
     public boolean updateExchangeCodeMark(long serialNum, boolean flag) {
-        return false;
+        Boolean boo = stringRedisTemplate.opsForValue().setBit(COUPON_CODE_MAP_KEY, serialNum, flag);
+        return boo != null && boo;
     }
 
 }
