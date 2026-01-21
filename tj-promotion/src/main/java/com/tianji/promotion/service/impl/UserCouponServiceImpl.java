@@ -70,25 +70,33 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
         Long userId = UserContext.getUser();
 
         String key = "lock:coupon:uid" + userId;
-        RLock lock = redissonClient.getLock(key);
 
-        boolean isLocked = lock.tryLock();
 
-        if (!isLocked) {
-            throw new BizIllegalException("系统繁忙，请稍后再试");
-        }
-        try {
+        IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+        userCouponService.checkAndCreateUserCoupon(coupon, userId);
 
-            IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
-            userCouponService.checkAndCreateUserCoupon(coupon, userId);
 
-        } finally {
-            lock.unlock();
-        }
+//        RLock lock = redissonClient.getLock(key);
+//
+//        boolean isLocked = lock.tryLock();
+//
+//        if (!isLocked) {
+//            throw new BizIllegalException("系统繁忙，请稍后再试");
+//        }
+//        try {
+//
+//            IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+//            userCouponService.checkAndCreateUserCoupon(coupon, userId);
+//
+//        } finally {
+//            lock.unlock();
+//        }
 
 
     }
 
+
+    @MyLock(name = "lock:coupon")
     @Transactional
     @Override
     public void checkAndCreateUserCoupon(Coupon coupon, Long userId) {
