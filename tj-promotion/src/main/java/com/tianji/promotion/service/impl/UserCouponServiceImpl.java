@@ -21,7 +21,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.tianji.promotion.utils.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +48,10 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
 
     private final IExchangeCodeService exchangeCodeService;
 
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private final RedissonClient redissonClient;
+
     @Override
     public void receiveCoupon(Long couponId) {
         Coupon coupon = couponMapper.selectById(couponId);
@@ -61,9 +68,22 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
         }
 
         Long userId = UserContext.getUser();
-        synchronized (userId.toString().intern()) {
+
+        String key = "lock:coupon:uid" + userId;
+        RLock lock = redissonClient.getLock(key);
+
+        boolean isLocked = lock.tryLock();
+
+        if (!isLocked) {
+            throw new BizIllegalException("系统繁忙，请稍后再试");
+        }
+        try {
+
             IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
             userCouponService.checkAndCreateUserCoupon(coupon, userId);
+
+        } finally {
+            lock.unlock();
         }
 
 
