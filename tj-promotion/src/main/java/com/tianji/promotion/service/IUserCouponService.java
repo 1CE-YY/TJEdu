@@ -32,4 +32,6 @@ public interface IUserCouponService extends IService<UserCoupon> {
     void checkAndCreateUserCouponNew(UserCouponDTO msg);
 
     List<CouponDiscountDTO> findDiscountSolution(List<OrderCourseDTO> courses);
+
+    void checkAndReceiveCoupon(UserCouponDTO userCouponDTO);
 }

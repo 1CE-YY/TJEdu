@@ -5,12 +5,12 @@ import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.promotion.domain.dto.CouponFormDTO;
 import com.tianji.promotion.domain.dto.CouponIssueFormDTO;
 import com.tianji.promotion.domain.query.CouponQuery;
-import com.tianji.promotion.domain.vo.CouponDetailVO;
 import com.tianji.promotion.domain.vo.CouponPageVO;
 import com.tianji.promotion.domain.vo.CouponVO;
 import com.tianji.promotion.service.ICouponService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +50,11 @@ public class CouponController {
     @PutMapping("{id}/issue")
     public void issueCoupon(@PathVariable Long id, @RequestBody @Validated CouponIssueFormDTO dto) {
         couponService.issueCoupon(id, dto);
+    }
+    @ApiOperation("暂停发放优惠券-管理端")
+    @PutMapping("{id}/pause")
+    public void pauseCouponIssue(@ApiParam("优惠券id") @PathVariable("id") Long id) {
+        couponService.pasueCouponIssue(id);
     }
 
     @ApiOperation("查询发放中的优惠券列表-用户端")

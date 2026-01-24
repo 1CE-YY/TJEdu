@@ -5,6 +5,7 @@ import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.utils.*;
+import com.tianji.promotion.constants.PromotionConstants;
 import com.tianji.promotion.domain.dto.CouponFormDTO;
 import com.tianji.promotion.domain.dto.CouponIssueFormDTO;
 import com.tianji.promotion.domain.po.Coupon;
@@ -24,6 +25,7 @@ import com.tianji.promotion.service.IExchangeCodeService;
 import com.tianji.promotion.service.IUserCouponService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +53,8 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
     private final IUserCouponService userCouponService;
 
     private final CouponMapper couponMapper;
+
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional
@@ -93,6 +97,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
     }
 
     @Override
+    @Transactional
     public void issueCoupon(Long id, CouponIssueFormDTO dto) {
         Coupon coupon = getById(dto.getId());
         if (coupon == null) {
@@ -113,6 +118,13 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         }
         updateById(c);
 
+        if (isBegin) {
+            coupon.setIssueBeginTime(c.getIssueBeginTime());
+            coupon.setIssueEndTime(c.getIssueEndTime());
+            cacheCouponInfo(coupon);
+        }
+
+
         if (Objects.equals(coupon.getObtainWay(), ObtainType.ISSUE) && Objects.equals(coupon.getStatus(), CouponStatus.DRAFT)) {
             // 发放优惠券
             coupon.setIssueBeginTime(c.getIssueBeginTime());
@@ -120,6 +132,15 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
 
 
         }
+    }
+
+    private void cacheCouponInfo(Coupon coupon) {
+        Map<String, String> map = new HashMap<>();
+        map.put("issueBeginTime", String.valueOf(DateUtils.toEpochMilli(coupon.getIssueBeginTime())));
+        map.put("issueEndTime", String.valueOf(DateUtils.toEpochMilli(coupon.getIssueEndTime())));
+        map.put("totalNum", String.valueOf(coupon.getTotalNum()));
+        map.put("userLimit", String.valueOf(coupon.getUserLimit()));
+        stringRedisTemplate.opsForHash().putAll(PromotionConstants.COUPON_CACHE_KEY_PREFIX + coupon.getId(), map);
     }
 
     @Override
@@ -162,5 +183,26 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
     @Override
     public void incrementIssueNum(Long couponId) {
         couponMapper.incrementIssueNum(couponId);
+    }
+
+    @Override
+    @Transactional
+    public void pasueCouponIssue(Long id) {
+        Coupon coupon = getById(id);
+        if (coupon == null) {
+            throw new BadRequestException("优惠券不存在");
+        }
+        if (!Objects.equals(coupon.getStatus(), CouponStatus.ISSUING) && !Objects.equals(coupon.getStatus(), CouponStatus.UN_ISSUE)) {
+            throw new BizIllegalException("优惠券状态错误，无法暂停发放");
+        }
+        boolean success = lambdaUpdate()
+                .set(Coupon::getStatus, CouponStatus.PAUSE)
+                .eq(Coupon::getId, id)
+                .in(Coupon::getStatus, CouponStatus.ISSUING, CouponStatus.UN_ISSUE)
+                .update();
+        if (!success) {
+            throw new BizIllegalException("优惠券状态错误，无法暂停发放");
+        }
+        stringRedisTemplate.delete(PromotionConstants.COUPON_CACHE_KEY_PREFIX + id);
     }
 }

@@ -1,8 +1,13 @@
 package com.tianji.promotion.service.impl;
 
+import cn.hutool.core.bean.copier.CopyOptions;
+import com.tianji.common.autoconfigure.mq.RabbitMqHelper;
+import com.tianji.common.constants.MqConstants;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
+import com.tianji.common.utils.BeanUtils;
 import com.tianji.common.utils.UserContext;
+import com.tianji.promotion.constants.PromotionConstants;
 import com.tianji.promotion.discount.Discount;
 import com.tianji.promotion.discount.DiscountStrategy;
 import com.tianji.promotion.domain.dto.CouponDiscountDTO;
@@ -50,11 +55,14 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
 
     private final StringRedisTemplate stringRedisTemplate;
 
-    private final RedissonClient redissonClient;
+    private final RabbitMqHelper rabbitMqHelper;
+
 
     @Override
+    @MyLock(name = "lock:coupon:receive")
     public void receiveCoupon(Long couponId) {
-        Coupon coupon = couponMapper.selectById(couponId);
+
+        Coupon coupon = queryCouponByCache(couponId);
         if (coupon == null) {
             throw new BadRequestException("优惠券不存在");
         }
@@ -63,17 +71,34 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
             throw new BizIllegalException("不在领取时间范围内，无法领取");
         }
 
-        if (coupon.getIssueNum() >= coupon.getTotalNum()) {
+        if (coupon.getIssueNum() <= 0) {
             throw new BizIllegalException("优惠券已被领完，无法领取");
         }
 
         Long userId = UserContext.getUser();
 
-        String key = "lock:coupon:uid" + userId;
+        String key = PromotionConstants.USER_COUPON_CACHE_KEY_PREFIX + couponId;
+
+        Long count = stringRedisTemplate.opsForHash().increment(key, userId.toString(), 1);
+
+        if (count > coupon.getUserLimit()) {
+            throw new BizIllegalException("您已达到该优惠券的领取上限，无法继续领取");
+        }
 
 
-        IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
-        userCouponService.checkAndCreateUserCoupon(coupon, userId);
+        stringRedisTemplate.opsForHash().increment(PromotionConstants.COUPON_CACHE_KEY_PREFIX + couponId, "totalNum", -1);
+
+        UserCouponDTO userCouponDTO = new UserCouponDTO();
+        userCouponDTO.setUserId(userId);
+        userCouponDTO.setCouponId(couponId);
+        rabbitMqHelper.send(MqConstants.Exchange.PROMOTION_EXCHANGE,
+                MqConstants.Key.COUPON_RECEIVE,
+                userCouponDTO);
+
+
+
+//        IUserCouponService userCouponService = (IUserCouponService) AopContext.currentProxy();
+//        userCouponService.checkAndCreateUserCoupon(coupon, userId);
 
 
 //        RLock lock = redissonClient.getLock(key);
@@ -92,6 +117,18 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
 //            lock.unlock();
 //        }
 
+
+    }
+
+    private Coupon queryCouponByCache(Long couponId) {
+        String key = PromotionConstants.COUPON_CACHE_KEY_PREFIX + couponId;
+
+        Map<Object, Object> objectMap = stringRedisTemplate.opsForHash().entries(key);
+        if (objectMap.isEmpty()) {
+            return null;
+        }
+
+        return BeanUtils.mapToBean(objectMap, Coupon.class, false, CopyOptions.create());
 
     }
 
@@ -184,5 +221,19 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
     @Override
     public List<CouponDiscountDTO> findDiscountSolution(List<OrderCourseDTO> courses) {
         return Collections.emptyList();
+    }
+
+    @Override
+    @Transactional
+    public void checkAndReceiveCoupon(UserCouponDTO userCouponDTO) {
+        Coupon coupon = couponMapper.selectById(userCouponDTO.getCouponId());
+        if (coupon == null) {
+            throw new BadRequestException("优惠券不存在");
+        }
+        int row = couponMapper.incrementIssueNum(coupon.getId());
+        if (row <= 0) {
+            throw new BizIllegalException("优惠券已被领完，无法领取");
+        }
+        saveUserCoupon(coupon, userCouponDTO.getUserId());
     }
 }
