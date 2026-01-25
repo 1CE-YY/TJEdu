@@ -1,9 +1,9 @@
 package com.tianji.promotion.controller;
 
 
-import com.google.gson.annotations.Expose;
 import com.tianji.promotion.domain.dto.CouponDiscountDTO;
 import com.tianji.promotion.domain.dto.OrderCourseDTO;
+import com.tianji.promotion.service.IDiscountService;
 import com.tianji.promotion.service.IUserCouponService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -28,6 +28,8 @@ public class UserCouponController {
 
     private final IUserCouponService userCouponService;
 
+    private final IDiscountService discountService;
+
     @ApiOperation("领取优惠券-用户端")
     @PostMapping("{id}/receive")
     public void receiveCoupon(@PathVariable Long id) {
@@ -44,6 +46,7 @@ public class UserCouponController {
     @ApiOperation("查询用户可用的优惠券方案")
     @PostMapping("available")
     public List<CouponDiscountDTO> findDiscountSolution(@RequestBody List<OrderCourseDTO> courses) {
-        return userCouponService.findDiscountSolution(courses);
+//        return userCouponService.findDiscountSolution(courses);
+        return discountService.findDiscountSolution(courses);
     }
 }

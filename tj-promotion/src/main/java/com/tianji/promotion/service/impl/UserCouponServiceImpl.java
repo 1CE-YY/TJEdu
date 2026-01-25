@@ -1,6 +1,7 @@
 package com.tianji.promotion.service.impl;
 
 import cn.hutool.core.bean.copier.CopyOptions;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.tianji.common.autoconfigure.mq.RabbitMqHelper;
 import com.tianji.common.constants.MqConstants;
 import com.tianji.common.exceptions.BadRequestException;
@@ -8,8 +9,6 @@ import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.utils.BeanUtils;
 import com.tianji.common.utils.UserContext;
 import com.tianji.promotion.constants.PromotionConstants;
-import com.tianji.promotion.discount.Discount;
-import com.tianji.promotion.discount.DiscountStrategy;
 import com.tianji.promotion.domain.dto.CouponDiscountDTO;
 import com.tianji.promotion.domain.dto.OrderCourseDTO;
 import com.tianji.promotion.domain.dto.UserCouponDTO;
@@ -22,19 +21,19 @@ import com.tianji.promotion.mapper.CouponMapper;
 import com.tianji.promotion.mapper.UserCouponMapper;
 import com.tianji.promotion.service.IExchangeCodeService;
 import com.tianji.promotion.service.IUserCouponService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.tianji.promotion.utils.*;
+import com.tianji.promotion.utils.CodeUtil;
+import com.tianji.promotion.utils.MyLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
-import org.springframework.aop.framework.AopContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * <p>
